@@ -1,0 +1,4 @@
+streamlit
+meta-ai-api
+fuzzywuzzy
+python-Levenshtein  # Required for fuzzywuzzy
