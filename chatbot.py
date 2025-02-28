@@ -1,7 +1,7 @@
 import json
 import streamlit as st
 from meta_ai_api import MetaAI
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 
 ai = MetaAI()
 
@@ -15,10 +15,19 @@ def load_dataset():
 dataset, questions_dict = load_dataset()
 
 def find_response(user_query):
-    match = process.extractOne(user_query.lower(), questions_dict.keys(), score_cutoff=80)
+    user_query = user_query.lower()
+    
+    # Step 1: Check for exact or substring matches
+    for key in questions_dict:
+        if user_query in key.lower():  # Partial matching
+            return questions_dict[key]
+
+    # Step 2: Use fuzzy matching for more flexibility
+    match = process.extractOne(user_query, questions_dict.keys(), scorer=fuzz.partial_ratio, score_cutoff=60)
     if match:
         return questions_dict[match[0]]
-    return None
+
+    return None  # If no match is found
 
 def get_meta_ai_response(user_query):
     dataset_string = json.dumps(dataset)
