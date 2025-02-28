@@ -20,19 +20,22 @@ def find_response(user_query):
     user_query = user_query.lower().strip()
     normalized_query = re.sub(r'[^\w\s]', '', user_query)
     
+    # Step 1: Check for exact matches
     if normalized_query in questions_dict:
         return questions_dict[normalized_query]
     
+    # Step 2: Check for partial matches (substring)
     for key in questions_dict:
         normalized_key = re.sub(r'[^\w\s]', '', key.lower())
         if normalized_query in normalized_key:
             return questions_dict[key]
     
+    # Step 3: Use fuzzy matching for more flexibility
     match = process.extractOne(normalized_query, questions_dict.keys(), scorer=fuzz.partial_ratio, score_cutoff=80)
     if match:
         return questions_dict[match[0]]
     
-    return None
+    return None  # If no match is found
 
 def get_meta_ai_response(user_query):
     dataset_string = json.dumps(dataset)
@@ -70,28 +73,36 @@ def chatbot():
     st.title("💬 AI Chatbot")
     st.markdown("🚀 Ask me anything!", unsafe_allow_html=True)
 
+    # Initialize chat history in session state
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
+    # Display chat history
     for entry in st.session_state.chat_history:
         st.markdown(f"<div class='user-msg'><b>You:</b> {entry['question']}</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='bot-msg'><b>Bot:</b> {entry['response']}</div>", unsafe_allow_html=True)
 
+    # Get user input
     user_query = st.chat_input("Type your question here...")
 
     if user_query:
-        if "last_query" in st.session_state and st.session_state.last_query == user_query:
-            st.stop()
+        # Avoid reprocessing the same query
+        if "last_query" not in st.session_state or st.session_state.last_query != user_query:
+            st.session_state.last_query = user_query
 
-        st.session_state.last_query = user_query
+            with st.spinner("🤖 Thinking..."):
+                # Try to find a response in the dataset
+                response = find_response(user_query)
+                if not response:
+                    # If no match is found, use the MetaAI API
+                    response = get_meta_ai_response(user_query)
 
-        with st.spinner("🤖 Thinking..."):
-            response = find_response(user_query)
-            if not response:
-                response = get_meta_ai_response(user_query)
+            # Add the question and response to the chat history
+            st.session_state.chat_history.append({"question": user_query, "response": response})
+            log_question_and_response(user_query, response)
 
-        st.session_state.chat_history.append({"question": user_query, "response": response})
-        log_question_and_response(user_query, response)
+            # Rerun the app to update the chat history display
+            st.rerun()
 
 if __name__ == "__main__":
     chatbot()
