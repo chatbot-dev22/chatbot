@@ -1,4 +1,6 @@
 import json
+import re
+import os
 import streamlit as st
 from meta_ai_api import MetaAI
 from rapidfuzz import process, fuzz
@@ -15,19 +17,22 @@ def load_dataset():
 dataset, questions_dict = load_dataset()
 
 def find_response(user_query):
-    user_query = user_query.lower()
+    user_query = user_query.lower().strip()
+    normalized_query = re.sub(r'[^\w\s]', '', user_query)
     
-    # Step 1: Check for exact or substring matches
+    if normalized_query in questions_dict:
+        return questions_dict[normalized_query]
+    
     for key in questions_dict:
-        if user_query in key.lower():  # Partial matching
+        normalized_key = re.sub(r'[^\w\s]', '', key.lower())
+        if normalized_query in normalized_key:
             return questions_dict[key]
-
-    # Step 2: Use fuzzy matching for more flexibility
-    match = process.extractOne(user_query, questions_dict.keys(), scorer=fuzz.partial_ratio, score_cutoff=60)
+    
+    match = process.extractOne(normalized_query, questions_dict.keys(), scorer=fuzz.partial_ratio, score_cutoff=80)
     if match:
         return questions_dict[match[0]]
-
-    return None  # If no match is found
+    
+    return None
 
 def get_meta_ai_response(user_query):
     dataset_string = json.dumps(dataset)
@@ -36,10 +41,16 @@ def get_meta_ai_response(user_query):
         response = ai.prompt(message=prompt_message, attempts=3)
         return response.get('message', "I'm sorry, I couldn't find an answer.")
     except Exception as e:
-        return f"⚠️ AI response failed: {str(e)}"
+        st.error(f"⚠️ AI response failed: {str(e)}")
+        return "I'm sorry, I encountered an error while processing your request."
 
 def log_question_and_response(question, response):
-    with open("all_questions_answers.txt", "a") as log_file:
+    log_file_path = "all_questions_answers.txt"
+    if not os.path.exists(log_file_path):
+        with open(log_file_path, "w") as log_file:
+            log_file.write("Chat Log:\n\n")
+    
+    with open(log_file_path, "a") as log_file:
         log_file.write(f"Question: {question}\nResponse: {response}\n\n")
 
 st.markdown("""
@@ -81,7 +92,6 @@ def chatbot():
 
         st.session_state.chat_history.append({"question": user_query, "response": response})
         log_question_and_response(user_query, response)
-        st.rerun()
 
 if __name__ == "__main__":
     chatbot()
